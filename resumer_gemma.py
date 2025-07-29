@@ -17,8 +17,10 @@ THREADS         = 8
 GPU_LAYERS      = 99
 REFRESH_INTERVAL = 10  # secondes entre les mises à jour de la barre
 
-# === État global pour moyenne temporelle ===
+# === État global pour moyenne temporelle et statistiques ===
 avg_time_per_token = None  # en secondes/token, mis à jour en cours d’exécution
+total_tokens = 0
+debut_programme = time.time()
 
 # === Lire fichiers déjà traités ===
 deja_traite = set()
@@ -158,6 +160,13 @@ for chemin_pdf in tqdm(pdfs):
 
     # Écriture du résumé
     resume_final = out["choices"][0]["text"].strip()
+    nb_tokens_out = compter_tokens(resume_final)
+    nb_tokens_input = PROMPT_TOKENS + nb_tokens
+    total_tokens += nb_tokens_input + nb_tokens_out
+    duree = time.time() - debut_programme
+    moyenne_globale = total_tokens / duree if duree > 0 else 0
+    print(f"📊 Total cumulé : {total_tokens} tokens — Moyenne {moyenne_globale:.1f} tok/s")
+
     bloc = f"Chemin : {chemin_pdf}\n{resume_final}\n\n{'-'*80}\n"
     try:
         with open(FICHIER_SORTIE, "a", encoding="utf-8") as f:
