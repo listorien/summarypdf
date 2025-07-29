@@ -11,7 +11,8 @@ DOSSIER_DE_BASE = BASE_DIR
 GGUF_MODEL_PATH = os.path.join(BASE_DIR, "gemma-3-4b-it-q4_0_s.gguf")
 FICHIER_SORTIE  = os.path.join(BASE_DIR, "summary_pdf.txt")
 MAX_PAGES       = 30
-CTX_TOKENS      = 65536
+CTX_TOKENS      = 131072
+MAX_OUTPUT_TOKENS = 16384  # tokens générés par le modèle
 THREADS         = 8
 GPU_LAYERS      = 99
 REFRESH_INTERVAL = 10  # secondes entre les mises à jour de la barre
@@ -36,6 +37,19 @@ llm = Llama(
     n_gpu_layers=GPU_LAYERS,
     verbose=False
 )
+
+# Préparation du prompt de base
+PROMPT_PREFIX = """### Instruction:
+Ce document est un fichier PDF. Donne un titre pertinent et un résumé clair en français.
+
+### Document :
+"""
+
+PROMPT_SUFFIX = """
+### Réponse attendue :
+Titre :"""
+
+PROMPT_TOKENS = len(llm.tokenize((PROMPT_PREFIX + PROMPT_SUFFIX).encode("utf-8")))
 
 # === Fonctions utilitaires ===
 
@@ -88,7 +102,8 @@ for chemin_pdf in tqdm(pdfs):
         print("⚠️ Document vide ou illisible, ignoré.")
         continue
 
-    texte = tronquer_texte_si_necessaire(texte, CTX_TOKENS)
+    max_input_tokens = CTX_TOKENS - PROMPT_TOKENS - MAX_OUTPUT_TOKENS
+    texte = tronquer_texte_si_necessaire(texte, max_input_tokens)
     nb_tokens = compter_tokens(texte)
     print(f"🔢 {nb_tokens} tokens à envoyer au modèle")
 
@@ -100,17 +115,10 @@ for chemin_pdf in tqdm(pdfs):
         print("⏳ Pas encore assez de données pour estimer le temps")
 
     # Appel au modèle et mesure
-    prompt = f"""### Instruction:
-Ce document est un fichier PDF. Donne un titre pertinent et un résumé clair en français.
-
-### Document :
-{texte}
-
-### Réponse attendue :
-Titre :"""
+    prompt = f"{PROMPT_PREFIX}{texte}{PROMPT_SUFFIX}"
 
     def appeler_modele():
-        return llm(prompt, max_tokens=512, temperature=0.7, stop=["###"])
+        return llm(prompt, max_tokens=MAX_OUTPUT_TOKENS, temperature=0.7, stop=["###"])
 
     start = time.time()
     if avg_time_per_token is not None:
@@ -125,11 +133,11 @@ Titre :"""
         th.start()
         while th.is_alive():
             time.sleep(REFRESH_INTERVAL)
-            incr = min(REFRESH_INTERVAL, estimation - pbar.n)
+            incr = min(REFRESH_INTERVAL, max(0, estimation - pbar.n))
             pbar.update(incr)
         th.join()
         elapsed = time.time() - start
-        pbar.update(estimation - pbar.n)
+        pbar.update(max(0, estimation - pbar.n))
         pbar.close()
         out = resultat["out"]
     else:
