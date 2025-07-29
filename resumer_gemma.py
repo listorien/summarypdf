@@ -1,6 +1,7 @@
 import os
 import time
 from tqdm import tqdm
+import threading
 from pypdf import PdfReader
 from llama_cpp import Llama
 
@@ -13,6 +14,7 @@ MAX_PAGES       = 30
 CTX_TOKENS      = 65536
 THREADS         = 8
 GPU_LAYERS      = 99
+REFRESH_INTERVAL = 10  # secondes entre les mises à jour de la barre
 
 # === État global pour moyenne temporelle ===
 avg_time_per_token = None  # en secondes/token, mis à jour en cours d’exécution
@@ -106,9 +108,33 @@ Ce document est un fichier PDF. Donne un titre pertinent et un résumé clair en
 
 ### Réponse attendue :
 Titre :"""
+
+    def appeler_modele():
+        return llm(prompt, max_tokens=512, temperature=0.7, stop=["###"])
+
     start = time.time()
-    out = llm(prompt, max_tokens=512, temperature=0.7, stop=["###"])
-    elapsed = time.time() - start
+    if avg_time_per_token is not None:
+        estimation = nb_tokens * avg_time_per_token
+        pbar = tqdm(total=estimation, unit="s", mininterval=REFRESH_INTERVAL)
+        resultat = {}
+
+        def tache():
+            resultat["out"] = appeler_modele()
+
+        th = threading.Thread(target=tache)
+        th.start()
+        while th.is_alive():
+            time.sleep(REFRESH_INTERVAL)
+            incr = min(REFRESH_INTERVAL, estimation - pbar.n)
+            pbar.update(incr)
+        th.join()
+        elapsed = time.time() - start
+        pbar.update(estimation - pbar.n)
+        pbar.close()
+        out = resultat["out"]
+    else:
+        out = appeler_modele()
+        elapsed = time.time() - start
 
     # Mise à jour de la moyenne temporelle (exponentielle)
     time_per_token = elapsed / nb_tokens if nb_tokens > 0 else 0
