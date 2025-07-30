@@ -12,13 +12,14 @@ GGUF_MODEL_PATH = os.path.join(BASE_DIR, "gemma-3-4b-it-q4_0_s.gguf")
 FICHIER_SORTIE  = os.path.join(BASE_DIR, "summary_pdf.txt")
 MAX_PAGES       = 30
 CTX_TOKENS      = 131072
-MAX_OUTPUT_TOKENS = 16384  # tokens générés par le modèle
+MAX_OUTPUT_TOKENS = 128  # tokens générés par le modèle
 THREADS         = 8
-GPU_LAYERS      = 99
-REFRESH_INTERVAL = 10  # secondes entre les mises à jour de la barre
+GPU_LAYERS      = -1
+N_BATCH         = 64
+REFRESH_INTERVAL = 2  # secondes entre les mises à jour de la barre
 
 # === État global pour moyenne temporelle et statistiques ===
-avg_time_per_token = None  # en secondes/token, mis à jour en cours d’exécution
+avg_time_per_token = None  # en secondes/token, mis à jour en cours d'exécution
 total_tokens = 0
 debut_programme = time.time()
 
@@ -36,6 +37,7 @@ llm = Llama(
     model_path=GGUF_MODEL_PATH,
     n_ctx=CTX_TOKENS,
     n_threads=THREADS,
+    n_batch=N_BATCH,   # traite 256 nouveaux tokens en parallèle
     n_gpu_layers=GPU_LAYERS,
     verbose=False
 )
