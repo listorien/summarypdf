@@ -98,6 +98,10 @@ for chemin_pdf in tqdm(pdfs):
         print(f"⏭️  Déjà traité : {chemin_pdf}")
         continue
 
+    # Affichage de l'heure actuelle avant traitement
+    heure_actuelle = time.strftime("%Y-%m-%d %H:%M:%S")
+    print(f"🕒 Heure actuelle : {heure_actuelle}")
+
     texte = extraire_texte(chemin_pdf)
     nb_caract = len(texte)
     print(f"ℹ️  {chemin_pdf} — {nb_caract} caractères extraits")
